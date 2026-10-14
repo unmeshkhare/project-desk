@@ -294,13 +294,13 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 
 /* ---------- state ---------- */
 const S = { user: undefined, name: '', projects: [], company: {}, loaded: {p:false, c:false}, err: null, filter: 'active', q: '', draft: {logo:'', signature:''}, lockSettings: false };
-let app, auth, db, unsubs = [];
+let fbApp, auth, db, unsubs = [];
 
 if (configured) {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
-  catch (e) { db = getFirestore(app); }
+  fbApp = initializeApp(firebaseConfig);
+  auth = getAuth(fbApp);
+  try { db = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch (e) { db = getFirestore(fbApp); }
 }
 
 const touch = () => ({ updatedBy: S.name, updatedAt: serverTimestamp() });
@@ -627,7 +627,7 @@ function settingsView() {
 }
 
 function render() {
-  app = app || $('#app');
+  const app = $('#app');
   if (!configured) { app.innerHTML = setupView(); return; }
   if (S.user === undefined) { app.innerHTML = '<div class="center"><div class="sub">Loading…</div></div>'; return; }
   if (!S.user) { if (!$('#login')) app.innerHTML = loginView(); return; }
