@@ -542,13 +542,16 @@ function newInvoice(p) {
   else items = [{ desc: p.name, hsn: S.company.defaultHsn || '', qty: 1, rate: remaining > 0 ? remaining : '' }];
   const gst = last ? last.gstRate : (c.quote ? c.quote.gstRate : (S.company.defaultGst ?? 18));
   const date = todayStr();
+  const TAX_C = 'CGST + SGST (same state)', TAX_I = 'IGST (other state / interstate)';
+  const stateIntra = st => !S.company.state || !st || S.company.state === st;
   const rowHtml = it => `<div class="irow"><input class="d" placeholder="Description" value="${esc(it.desc)}"><input class="h" placeholder="HSN/SAC" value="${esc(it.hsn)}"><input class="q" type="number" step="any" min="0" value="${esc(it.qty)}"><input class="r" type="number" step="0.01" min="0" placeholder="0.00" value="${esc(it.rate)}"><span class="amt"></span><button type="button" class="x" title="Remove line">×</button></div>`;
   return modal({ title: `Generate invoice — Rev ${nextRev(p, 'invoices')}`, wide: true, submit: 'Save & download PDF',
     body: `<div class="grid">
       ${F('Invoice number (auto, editable)','no',nextInvoiceNumber(date),{req:1})}${F('Invoice date','date',date,{type:'date',req:1})}
       ${F('Client name','cname',cl.name,{req:1})}${F('Client GSTIN','cgstin',cl.gstin)}
       ${F('Client address','caddr',cl.address,{area:1,full:1})}
-      ${F('Place of supply (state)','pos',cl.state,{select:STATES})}${F('GST %','gst',gst,{...money})}</div>
+      ${F('Place of supply (state)','pos',cl.state,{select:STATES})}${F('Tax type — you can change this','taxtype',stateIntra(cl.state)?TAX_C:TAX_I,{select:[TAX_C,TAX_I]})}
+      ${F('GST %','gst',gst,{...money})}</div>
       <p class="sub" style="margin:14px 0 6px">Items — enter the project cost to bill (before tax)</p>
       <div class="irow h"><span>Description</span><span>HSN/SAC</span><span>Qty</span><span>Rate (₹)</span><span style="text-align:right">Amount</span><span></span></div>
       <div id="items">${items.map(rowHtml).join('')}</div>
@@ -557,7 +560,7 @@ function newInvoice(p) {
       <div class="grid" style="margin-top:12px">${F('Notes for this invoice (optional)','notes',last?last.notes:'',{area:1,full:1})}</div>`,
     onOpen: form => {
       const calcRows = () => $$('.irow', form).filter(r => !r.classList.contains('h')).map(r => ({ desc: $('.d',r).value.trim(), hsn: $('.h',r).value.trim(), qty: num($('.q',r).value), rate: num($('.r',r).value), row: r }));
-      const intra = () => !S.company.state || !form.pos.value || S.company.state === form.pos.value;
+      const intra = () => form.taxtype.value === TAX_C;
       const recalc = () => {
         const rows = calcRows(); rows.forEach(x => { $('.amt', x.row).textContent = inr(x.qty * x.rate); });
         const t = computeTotals(rows, form.gst.value, intra()); const g = num(form.gst.value);
@@ -565,6 +568,8 @@ function newInvoice(p) {
           (g > 0 ? (intra() ? `<div><span>CGST ${g/2}%</span><span>${inr(t.cgst)}</span></div><div><span>SGST ${g/2}%</span><span>${inr(t.sgst)}</span></div>` : `<div><span>IGST ${g}%</span><span>${inr(t.igst)}</span></div>`) : '') +
           `<div class="g"><span>Total</span><span>${inr(t.total)}</span></div>`;
       };
+      form.pos.addEventListener('change', () => { if (!form.taxtype.dataset.touched) form.taxtype.value = stateIntra(form.pos.value) ? TAX_C : TAX_I; });
+      form.taxtype.addEventListener('change', () => form.taxtype.dataset.touched = '1');
       form.addEventListener('input', recalc); form.addEventListener('change', recalc);
       form.addEventListener('click', e => {
         if (e.target.id === 'addrow') { $('#items', form).insertAdjacentHTML('beforeend', rowHtml({ desc: '', hsn: S.company.defaultHsn || '', qty: 1, rate: '' })); recalc(); }
@@ -579,7 +584,7 @@ function newInvoice(p) {
       if (!rows.length || rows.some(x => !x.desc || x.qty <= 0 || x.rate <= 0)) throw new Error('Each line needs a description, quantity and rate above zero.');
       const number = form.no.value.trim();
       if (S.projects.some(pr => (pr.invoices || []).some(i => i.number === number))) throw new Error(`Invoice number ${number} is already used. Please change it.`);
-      const pos = form.pos.value; const intraNow = !S.company.state || !pos || S.company.state === pos; const gstRate = num(form.gst.value);
+      const pos = form.pos.value; const intraNow = form.taxtype.value === TAX_C; const gstRate = num(form.gst.value);
       const t = computeTotals(rows, gstRate, intraNow);
       const entry = { rev: nextRev(p, 'invoices'), number, date: form.date.value, project: p.name,
         client: { name: form.cname.value.trim(), gstin: form.cgstin.value.trim().toUpperCase(), address: form.caddr.value.trim(), state: pos },
